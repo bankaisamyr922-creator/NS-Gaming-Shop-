@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>NS Gaming Shop — Recharges de jeux & abonnements</title>
+<meta name="description" content="NS Gaming Shop — recharges Free Fire, PUBG, Netflix, Disney+ et cartes cadeaux en Haïti. Paiement MonCash & NatCash." />
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js" crossorigin></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; font-family:'Inter',sans-serif; }
+  ::selection { background:#8B5CF655; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useMemo, useRef } = React;
+
+const C = {
+  bg: "#0A0A12", surface: "#14141C", surface2: "#1B1B26", border: "#26262F",
+  text: "#F5F5F7", muted: "#9CA3AF", purple: "#8B5CF6", purpleDark: "#6D28D9",
+  pink: "#EC4899", gold: "#FBBF24", green: "#22C55E",
+};
+
+const fmt = (n) => `${n.toLocaleString("fr-FR")} HTG`;
+
+const PAYMENT_ACCOUNTS = {
+  MonCash: { number: "36 81 10 78", name: "Alix Murielle" },
+  NatCash: { number: "35 47 26 16", name: "Alix Murielle" },
+};
+const ADMIN_PIN = "NS2026";
+const makeOrderId = () => `NS-${Date.now().toString(36).toUpperCase()}`;
+const STATUS_LABELS = {
+  en_attente: { label: "En attente", color: C.gold },
+  valide: { label: "Validé", color: C.purple },
+  livre: { label: "Livré", color: C.green },
+};
+
+// --- Simple icon set (inline SVG, no external icon library needed) ---
+const Icon = ({ name, size = 18, color = "currentColor" }) => {
+  const p = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: color, strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round" };
+  const paths = {
+    cart: <><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></>,
+    close: <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>,
+    plus: <><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>,
+    minus: <line x1="5" y1="12" x2="19" y2="12"/>,
+    check: <polyline points="20 6 9 17 4 12"/>,
+    gamepad: <><line x1="6" y1="12" x2="10" y2="12"/><line x1="8" y1="10" x2="8" y2="14"/><circle cx="15" cy="13" r="1"/><circle cx="18" cy="11" r="1"/><rect x="2" y="6" width="20" height="12" rx="4"/></>,
+    tv: <><rect x="2" y="7" width="20" height="15" rx="2"/><polyline points="17 2 12 7 7 2"/></>,
+    gift: <><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></>,
+    chevronRight: <polyline points="9 18 15 12 9 6"/>,
+    lock: <><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></>,
+    refresh: <><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></>,
+    send: <><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></>,
+    bot: <><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/></>,
+    search: <><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></>,
+    menu: <><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></>,
+    home: <><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></>,
+    shield: <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>,
+    mail: <><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="22,6 12,13 2,6"/></>,
+    user: <><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></>,
+    chevronDown: <polyline points="6 9 12 15 18 9"/>,
+    whatsapp: <path d="M17.6 6.3A8 8 0 1 0 6 18.9L4 21l2.2-1.9A8 8 0 0 0 17.6 6.3z"/>,
+  };
+  return <svg {...p}>{paths[name]}</svg>;
+};
+
+const CATEGORIES = [
+  { id: "jeux", label: "Jeux Mobile", icon: "gamepad", color: C.purple },
+  { id: "stream", label: "Abonnements", icon: "tv", color: "#22C55E" },
+  { id: "cadeau", label: "Cartes Cadeaux", icon: "gift", color: C.gold },
+];
+
+const TOP_VENTES = [
+  { catId: "jeux", name: "Jeux Mobile", desc: "Diamants, UC, abonnements et plus encore à prix réduit.", gradient: "linear-gradient(135deg, #7C3AED 0%, #EC4899 100%)", badge: "TOP VENTES" },
+  { catId: "stream", name: "Abonnements", desc: "Netflix, Disney+, Spotify — profite sans interruption.", gradient: "linear-gradient(135deg, #0EA5E9 0%, #22C55E 100%)", badge: "POPULAIRE" },
+  { catId: "cadeau", name: "Cartes Cadeaux", desc: "Google Play, iTunes, Steam — livrées en quelques minutes.", gradient: "linear-gradient(135deg, #F59E0B 0%, #EF4444 100%)", badge: "NOUVEAU" },
+];
+
+const PRODUCTS = [
+  { id: "freefire", cat: "jeux", name: "Free Fire", tag: "Diamants", color: C.purple, needsId: "ID du joueur",
+    options: [{ label: "100 💎", price: 200 }, { label: "310 💎", price: 520 }, { label: "520 💎", price: 850 }, { label: "1080 💎", price: 1700 }] },
+  { id: "pubg", cat: "jeux", name: "PUBG Mobile", tag: "UC", color: C.purple, needsId: "ID du joueur",
+    options: [{ label: "60 UC", price: 200 }, { label: "325 UC", price: 800 }, { label: "660 UC", price: 1600 }] },
+  { id: "mlbb", cat: "jeux", name: "Mobile Legends", tag: "Diamants", color: C.purple, needsId: "ID + Zone",
+    options: [{ label: "86 💎", price: 350 }, { label: "172 💎", price: 650 }, { label: "429 💎", price: 1450 }] },
+  { id: "cod", cat: "jeux", name: "Call of Duty Mobile", tag: "CP", color: C.purple, needsId: "UID Activision",
+    options: [{ label: "80 CP", price: 200 }, { label: "420 CP", price: 800 }] },
+  { id: "netflix", cat: "stream", name: "Netflix", tag: "1 mois", color: "#22C55E", needsId: "Email du compte",
+    options: [{ label: "Basique", price: 900 }, { label: "Standard", price: 1450 }, { label: "Premium", price: 2000 }] },
+  { id: "disney", cat: "stream", name: "Disney+", tag: "1 mois", color: "#22C55E", needsId: "Email du compte",
+    options: [{ label: "Standard", price: 800 }] },
+  { id: "spotify", cat: "stream", name: "Spotify Premium", tag: "1 mois", color: "#22C55E", needsId: "Email du compte",
+    options: [{ label: "Individuel", price: 650 }] },
+  { id: "googleplay", cat: "cadeau", name: "Google Play", tag: "Carte cadeau", color: C.gold, needsId: null,
+    options: [{ label: "$10", price: 1300 }, { label: "$25", price: 3250 }, { label: "$50", price: 6500 }] },
+  { id: "itunes", cat: "cadeau", name: "iTunes", tag: "Carte cadeau", color: C.gold, needsId: null,
+    options: [{ label: "$10", price: 1300 }, { label: "$25", price: 3250 }] },
+  { id: "steam", cat: "cadeau", name: "Steam Wallet", tag: "Carte cadeau", color: C.gold, needsId: null,
+    options: [{ label: "$10", price: 1300 }, { label: "$20", price: 2600 }] },
+];
+
+// --- FAQ rule-based bot (no external AI needed) ---
+const FAQ = [
+  { kw: ["free fire", "ff", "diamant"], a: "Free Fire : 100💎 = 200 HTG, 310💎 = 520 HTG, 520💎 = 850 HTG, 1080💎 = 1700 HTG. Livraison via ton ID de joueur." },
+  { kw: ["pubg", "uc"], a: "PUBG Mobile : 60 UC = 200 HTG, 325 UC = 800 HTG, 660 UC = 1600 HTG." },
+  { kw: ["netflix"], a: "Netflix : Basique = 900 HTG, Standard = 1450 HTG, Premium = 2000 HTG, pour 1 mois." },
+  { kw: ["disney"], a: "Disney+ Standard = 800 HTG pour 1 mois." },
+  { kw: ["spotify"], a: "Spotify Premium Individuel = 650 HTG pour 1 mois." },
+  { kw: ["google play"], a: "Cartes Google Play : $10 = 1300 HTG, $25 = 3250 HTG, $50 = 6500 HTG." },
+  { kw: ["itunes"], a: "Cartes iTunes : $10 = 1300 HTG, $25 = 3250 HTG." },
+  { kw: ["steam"], a: "Steam Wallet : $10 = 1300 HTG, $20 = 2600 HTG." },
+  { kw: ["paiement", "moncash", "natcash", "payer"], a: "On accepte MonCash (36 81 10 78) et NatCash (35 47 26 16), au nom d'Alix Murielle. Garde ta référence de transaction pour la commande." },
+  { kw: ["livraison", "delai", "temps", "combien de temps"], a: "La livraison se fait après validation manuelle du paiement, généralement en quelques minutes à quelques heures." },
+  { kw: ["contact", "whatsapp", "telephone", "numero"], a: "Tu peux nous contacter directement sur WhatsApp au +509 38 22 3773." },
+];
+const answerFaq = (q) => {
+  const low = q.toLowerCase();
+  const hit = FAQ.find((f) => f.kw.some((k) => low.includes(k)));
+  return hit ? hit.a : "Je n'ai pas une réponse précise pour ça — écris-nous directement sur WhatsApp au +509 38 22 3773, on te répond vite !";
+};
+
+function Ticket({ items, total, onRemove, onQty }) {
+  return (
+    <div className="flex flex-col h-full">
+      <div className="px-5 pt-5 pb-4" style={{ backgroundImage: `repeating-linear-gradient(90deg, ${C.border} 0 6px, transparent 6px 12px)`, backgroundSize: "100% 3px", backgroundPosition: "bottom", backgroundRepeat: "no-repeat" }}>
+        <p className="text-[11px] tracking-[0.2em] uppercase" style={{ fontFamily: "'JetBrains Mono', monospace", color: C.muted }}>Reçu de recharge</p>
+        <h3 className="text-xl mt-1" style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, color: C.text }}>Panier</h3>
+      </div>
+      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+        {items.length === 0 && <p className="text-sm mt-8 text-center" style={{ color: C.muted }}>Ton panier est vide.<br/>Choisis une recharge pour commencer.</p>}
+        {items.map((it) => (
+          <div key={it.key} className="flex items-center justify-between gap-3 pb-3" style={{ borderBottom: `1px dashed ${C.border}` }}>
+            <div className="min-w-0">
+              <p className="text-sm font-medium truncate" style={{ color: C.text }}>{it.name}</p>
+              <p className="text-xs" style={{ color: C.muted }}>{it.label}</p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button onClick={() => onQty(it.key, -1)} className="w-6 h-6 rounded-full flex items-center justify-center" style={{ border: `1px solid ${C.border}`, color: C.text }}><Icon name="minus" size={12} /></button>
+              <span className="text-sm w-4 text-center" style={{ fontFamily: "'JetBrains Mono', monospace", color: C.text }}>{it.qty}</span>
+              <button onClick={() => onQty(it.key, 1)} className="w-6 h-6 rounded-full flex items-center justify-center" style={{ border: `1px solid ${C.border}`, color: C.text }}><Icon name="plus" size={12} /></button>
+              <span className="text-sm w-16 text-right" style={{ fontFamily: "'JetBrains Mono', monospace", color: C.text }}>{fmt(it.price * it.qty)}</span>
+              <button onClick={() => onRemove(it.key)} style={{ color: C.muted }}><Icon name="close" size={14} /></button>
+            </div>
+          </div>
+        ))}
+      </div>
+      {items.length > 0 && (
+        <div className="px-5 py-4" style={{ backgroundImage: `repeating-linear-gradient(90deg, ${C.border} 0 6px, transparent 6px 12px)`, backgroundSize: "100% 3px", backgroundPosition: "top", backgroundRepeat: "no-repeat" }}>
+          <div className="flex justify-between items-baseline">
+            <span className="text-xs uppercase tracking-wide" style={{ color: C.muted, fontFamily: "'JetBrains Mono', monospace" }}>Total</span>
+            <span className="text-2xl" style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, color: C.purple }}>{fmt(total)}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CheckoutModal({ items, total, onClose, onConfirm }) {
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [gameId, setGameId] = useState("");
+  const [payment, setPayment] = useState("MonCash");
+  const [reference, setReference] = useState("");
+  const [sent, setSent] = useState(false);
+  const [orderId, setOrderId] = useState("");
+  const needsId = items.some((it) => it.needsId);
+  const inputStyle = { border: `1px solid ${C.border}`, background: C.surface2, color: C.text };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const id = makeOrderId();
+    const order = { id, name, phone, gameId, payment, reference, items, total, status: "en_attente", createdAt: new Date().toISOString() };
+    try {
+      const existing = JSON.parse(localStorage.getItem("ns_orders") || "[]");
+      existing.push(order);
+      localStorage.setItem("ns_orders", JSON.stringify(existing));
+    } catch (err) { console.error(err); }
+    setOrderId(id);
+    setSent(true);
+  };
+
+  if (sent) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.7)" }}>
+        <div className="rounded-2xl max-w-sm w-full p-8 text-center" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
+          <div className="w-14 h-14 rounded-full mx-auto flex items-center justify-center mb-4" style={{ background: "#22C55E1A" }}><Icon name="check" size={26} color={C.green} /></div>
+          <h3 className="text-lg mb-2" style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, color: C.text }}>Commande enregistrée</h3>
+          <p className="text-xs mb-3" style={{ fontFamily: "'JetBrains Mono', monospace", color: C.muted }}>Référence commande : {orderId}</p>
+          <p className="text-sm mb-6" style={{ color: C.muted }}>Merci {name || "cher client"} ! Ta commande de {fmt(total)} est en attente de validation. On confirme ton paiement {payment} et on te livre dès que possible.</p>
+          <a href={`https://wa.me/50938223773?text=${encodeURIComponent(`Bonjour, commande ${orderId} — ${fmt(total)} (${name || "client"}), paiement ${payment}, référence transaction: ${reference}.`)}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-5 py-3 rounded-full text-sm font-medium text-white w-full justify-center" style={{ background: C.green }}>
+            <Icon name="whatsapp" size={16} /> Ouvrir WhatsApp
+          </a>
+          <button onClick={() => { onConfirm(); onClose(); }} className="mt-3 text-sm w-full py-2" style={{ color: C.muted }}>Fermer</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.7)" }}>
+      <form onSubmit={handleSubmit} className="rounded-2xl max-w-sm w-full p-6 max-h-[90vh] overflow-y-auto" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg" style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, color: C.text }}>Finaliser la commande</h3>
+          <button type="button" onClick={onClose}><Icon name="close" size={18} color={C.muted} /></button>
+        </div>
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs" style={{ color: C.muted }}>Nom complet</label>
+            <input required value={name} onChange={(e) => setName(e.target.value)} className="w-full mt-1 px-3 py-2 rounded-lg text-sm outline-none" style={inputStyle} placeholder="Ex: Naruto Uzumaki" />
+          </div>
+          <div>
+            <label className="text-xs" style={{ color: C.muted }}>Numéro WhatsApp</label>
+            <input required value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full mt-1 px-3 py-2 rounded-lg text-sm outline-none" style={inputStyle} placeholder="+509 xx xx xx xx" />
+          </div>
+          {needsId && (
+            <div>
+              <label className="text-xs" style={{ color: C.muted }}>ID de jeu / Email (pour chaque article)</label>
+              <textarea required value={gameId} onChange={(e) => setGameId(e.target.value)} rows={2} className="w-full mt-1 px-3 py-2 rounded-lg text-sm outline-none resize-none" style={inputStyle} placeholder="Indique ton ID ou email pour chaque recharge" />
+            </div>
+          )}
+          <div>
+            <label className="text-xs" style={{ color: C.muted }}>Mode de paiement</label>
+            <div className="flex gap-2 mt-1">
+              {["MonCash", "NatCash"].map((m) => (
+                <button type="button" key={m} onClick={() => setPayment(m)} className="flex-1 py-2 rounded-lg text-xs font-medium" style={{ border: payment === m ? `1.5px solid ${C.purple}` : `1px solid ${C.border}`, background: payment === m ? "#8B5CF61A" : C.surface2, color: payment === m ? C.purple : C.muted }}>{m}</button>
+              ))}
+            </div>
+            <div className="mt-2 px-3 py-2.5 rounded-lg text-xs" style={{ background: C.surface2, border: `1px solid ${C.border}` }}>
+              <p style={{ color: C.muted }}>Envoie le paiement à ce numéro {payment} :</p>
+              <p className="mt-0.5 text-sm" style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, color: C.text }}>{PAYMENT_ACCOUNTS[payment].number}</p>
+              <p style={{ color: C.muted }}>{PAYMENT_ACCOUNTS[payment].name}</p>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs" style={{ color: C.muted }}>Numéro de référence de la transaction {payment}</label>
+            <input required value={reference} onChange={(e) => setReference(e.target.value)} className="w-full mt-1 px-3 py-2 rounded-lg text-sm outline-none" style={{ ...inputStyle, fontFamily: "'JetBrains Mono', monospace" }} placeholder="Ex: 8842193" />
+          </div>
+        </div>
+        <div className="flex justify-between items-baseline mt-5 pt-4" style={{ borderTop: `1px dashed ${C.border}` }}>
+          <span className="text-xs uppercase" style={{ color: C.muted }}>Total à payer</span>
+          <span className="text-xl" style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, color: C.purple }}>{fmt(total)}</span>
+        </div>
+        <button type="submit" className="w-full mt-4 py-3 rounded-full text-sm font-medium text-white" style={{ background: C.purple }}>Confirmer la commande</button>
+      </form>
+    </div>
+  );
+}
+
+function AdminPanel({ onClose }) {
+  const [pin, setPin] = useState("");
+  const [authed, setAuthed] = useState(false);
+  const [orders, setOrders] = useState([]);
+  const [error, setError] = useState("");
+
+  const loadOrders = () => {
+    try {
+      const list = JSON.parse(localStorage.getItem("ns_orders") || "[]");
+      list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      setOrders(list);
+    } catch { setError("Impossible de charger les commandes."); }
+  };
+
+  useEffect(() => { if (authed) loadOrders(); }, [authed]);
+
+  const updateStatus = (order, status) => {
+    const updated = orders.map((o) => (o.id === order.id ? { ...o, status } : o));
+    setOrders(updated);
+    localStorage.setItem("ns_orders", JSON.stringify(updated));
+  };
+
+  if (!authed) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.7)" }}>
+        <form onSubmit={(e) => { e.preventDefault(); if (pin === ADMIN_PIN) setAuthed(true); else setError("Code incorrect."); }} className="rounded-2xl max-w-xs w-full p-6" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-base flex items-center gap-2" style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, color: C.text }}><Icon name="lock" size={16} /> Espace admin</h3>
+            <button type="button" onClick={onClose}><Icon name="close" size={18} color={C.muted} /></button>
+          </div>
+          <input type="password" autoFocus value={pin} onChange={(e) => setPin(e.target.value)} className="w-full px-3 py-2 rounded-lg text-sm outline-none" style={{ border: `1px solid ${C.border}`, background: C.surface2, color: C.text }} placeholder="Code PIN" />
+          {error && <p className="text-xs mt-2" style={{ color: "#F87171" }}>{error}</p>}
+          <button type="submit" className="w-full mt-4 py-2.5 rounded-full text-sm font-medium text-white" style={{ background: C.purple }}>Entrer</button>
+        </form>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.7)" }}>
+      <div className="rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
+        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: `1px solid ${C.border}` }}>
+          <h3 className="text-lg" style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, color: C.text }}>Commandes ({orders.length})</h3>
+          <div className="flex items-center gap-3">
+            <button onClick={loadOrders} style={{ color: C.muted }}><Icon name="refresh" size={16} /></button>
+            <button onClick={onClose}><Icon name="close" size={18} color={C.muted} /></button>
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+          {!orders.length && <p className="text-sm text-center py-10" style={{ color: C.muted }}>Aucune commande pour l'instant.</p>}
+          {orders.map((o) => {
+            const st = STATUS_LABELS[o.status] || STATUS_LABELS.en_attente;
+            return (
+              <div key={o.id} className="rounded-xl p-4" style={{ border: `1px solid ${C.border}`, background: C.surface2 }}>
+                <div className="flex justify-between items-start gap-3 flex-wrap">
+                  <div>
+                    <p className="text-sm font-medium" style={{ color: C.text }}>{o.name} · {o.phone}</p>
+                    <p className="text-xs" style={{ color: C.muted, fontFamily: "'JetBrains Mono', monospace" }}>{o.id} · {new Date(o.createdAt).toLocaleString("fr-FR")}</p>
+                  </div>
+                  <span className="px-2.5 py-1 rounded-full text-[11px] font-medium" style={{ background: `${st.color}1A`, color: st.color }}>{st.label}</span>
+                </div>
+                <div className="mt-2 text-xs" style={{ color: C.muted }}>{o.items.map((it) => `${it.name} ${it.label} x${it.qty}`).join(", ")}</div>
+                {o.gameId && <p className="mt-1 text-xs" style={{ color: C.muted }}>ID/Email : {o.gameId}</p>}
+                <p className="mt-1 text-xs" style={{ color: C.muted }}>Paiement : {o.payment} · Réf : <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{o.reference}</span></p>
+                <div className="flex items-center justify-between mt-3">
+                  <span className="text-sm font-semibold" style={{ color: C.text }}>{fmt(o.total)}</span>
+                  <div className="flex gap-2">
+                    <button onClick={() => updateStatus(o, "valide")} className="px-3 py-1.5 rounded-full text-xs font-medium" style={{ border: `1px solid ${C.purple}`, color: C.purple }}>Valider</button>
+                    <button onClick={() => updateStatus(o, "livre")} className="px-3 py-1.5 rounded-full text-xs font-medium text-white" style={{ background: C.green }}>Livrer</button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ChatBot({ onClose }) {
+  const [messages, setMessages] = useState([{ role: "assistant", text: "Bonjour ! Je suis l'assistant N.S. Pose-moi une question sur les prix, jeux, abonnements ou le paiement." }]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const scrollRef = useRef(null);
+  useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }); }, [messages, loading]);
+
+  const send = async () => {
+    const text = input.trim();
+    if (!text || loading) return;
+    const newMessages = [...messages, { role: "user", text }];
+    setMessages(newMessages);
+    setInput("");
+    setLoading(true);
+    try {
+      const res = await fetch("/.netlify/functions/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: newMessages }),
+      });
+      const data = await res.json();
+      const reply = data.reply || "Désolé, je n'ai pas pu répondre. Contacte-nous sur WhatsApp.";
+      setMessages((m) => [...m, { role: "assistant", text: reply }]);
+    } catch (err) {
+      setMessages((m) => [...m, { role: "assistant", text: "Une erreur est survenue. Écris-nous sur WhatsApp au +509 38 22 3773." }]);
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className="fixed bottom-24 right-5 z-50 w-[calc(100%-2.5rem)] max-w-sm rounded-2xl shadow-2xl flex flex-col overflow-hidden" style={{ height: "min(70vh, 480px)", border: `1px solid ${C.border}`, background: C.surface }}>
+      <div className="flex items-center justify-between px-4 py-3" style={{ background: C.purpleDark }}>
+        <div className="flex items-center gap-2 text-white text-sm font-medium"><Icon name="bot" size={16} color={C.gold} /> Assistant N.S</div>
+        <button onClick={onClose}><Icon name="close" size={16} color="white" /></button>
+      </div>
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+        {messages.map((m, i) => (
+          <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+            <div className="max-w-[85%] px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap" style={{ background: m.role === "user" ? C.purple : C.surface2, color: m.role === "user" ? "white" : C.text }}>{m.text}</div>
+          </div>
+        ))}
+        {loading && (
+          <div className="flex justify-start">
+            <div className="px-3 py-2 rounded-2xl text-sm" style={{ background: C.surface2, color: C.muted }}>En train d'écrire...</div>
+          </div>
+        )}
+      </div>
+      <div className="flex items-center gap-2 px-3 py-3" style={{ borderTop: `1px solid ${C.border}` }}>
+        <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} placeholder="Pose ta question..." className="flex-1 px-3 py-2 rounded-full text-sm outline-none" style={{ border: `1px solid ${C.border}`, background: C.surface2, color: C.text }} />
+        <button onClick={send} disabled={loading} className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 disabled:opacity-50" style={{ background: C.purple }}><Icon name="send" size={14} color="white" /></button>
+      </div>
+    </div>
+  );
+}
+
+function NSGamingShop() {
+  const [activeCat, setActiveCat] = useState("jeux");
+  const [cart, setCart] = useState([]);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [adminOpen, setAdminOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const filtered = searchQuery.trim()
+    ? PRODUCTS.filter((p) => p.name.toLowerCase().includes(searchQuery.trim().toLowerCase()))
+    : PRODUCTS.filter((p) => p.cat === activeCat);
+
+  const addToCart = (product, option) => {
+    const key = `${product.id}-${option.label}`;
+    setCart((prev) => {
+      const existing = prev.find((it) => it.key === key);
+      if (existing) return prev.map((it) => (it.key === key ? { ...it, qty: it.qty + 1 } : it));
+      return [...prev, { key, name: product.name, label: option.label, price: option.price, qty: 1, needsId: !!product.needsId }];
+    });
+    setToast(`${product.name} · ${option.label} ajouté`);
+    setTimeout(() => setToast(null), 1800);
+  };
+
+  const removeFromCart = (key) => setCart((prev) => prev.filter((it) => it.key !== key));
+  const changeQty = (key, delta) => setCart((prev) => prev.map((it) => (it.key === key ? { ...it, qty: it.qty + delta } : it)).filter((it) => it.qty > 0));
+  const total = useMemo(() => cart.reduce((s, it) => s + it.price * it.qty, 0), [cart]);
+  const itemCount = useMemo(() => cart.reduce((s, it) => s + it.qty, 0), [cart]);
+
+  const scrollTo = (id) => { setMenuOpen(false); document.getElementById(id)?.scrollIntoView({ behavior: "smooth" }); };
+  const goToCategory = (catId) => { setSearchQuery(""); setActiveCat(catId); scrollTo("boutique"); };
+
+  return (
+    <div style={{ fontFamily: "'Inter', sans-serif", background: C.bg, minHeight: "100vh", color: C.text }}>
+      <header className="sticky top-0 z-40 backdrop-blur" style={{ background: "#0A0A12EE", borderBottom: `1px solid ${C.border}` }}>
+        <div className="max-w-6xl mx-auto px-5 py-4 flex items-center justify-between gap-4">
+          <button onClick={() => scrollTo("accueil")} className="flex items-center gap-2 shrink-0">
+            <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: "1.3rem", fontStyle: "italic", color: C.text }}>N<span style={{ color: C.purple }}>S</span></span>
+            <span className="flex flex-col leading-none text-left">
+              <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: "0.85rem", color: C.text }}>GAMING</span>
+              <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: "0.6rem", color: C.purple, letterSpacing: "0.15em" }}>SHOP</span>
+            </span>
+          </button>
+          <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
+            <button onClick={() => scrollTo("accueil")} className="flex items-center gap-1.5" style={{ color: C.text }}><Icon name="home" size={15} /> Accueil</button>
+            <button onClick={() => scrollTo("boutique")} className="flex items-center gap-1.5" style={{ color: C.text }}><Icon name="gamepad" size={15} /> Jeux <Icon name="chevronDown" size={13} /></button>
+            <button onClick={() => scrollTo("apropos")} className="flex items-center gap-1.5" style={{ color: C.text }}><Icon name="shield" size={15} /> À propos</button>
+            <button onClick={() => scrollTo("contact")} className="flex items-center gap-1.5" style={{ color: C.text }}><Icon name="mail" size={15} /> Contact</button>
+          </nav>
+          <div className="flex items-center gap-3 shrink-0">
+            <button onClick={() => setSearchOpen((v) => !v)} style={{ color: C.text }}><Icon name="search" size={18} /></button>
+            <button onClick={() => setDrawerOpen(true)} className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium" style={{ border: `1px solid ${C.purple}`, color: C.text }}><Icon name="cart" size={16} /> Panier ({itemCount})</button>
+            <button onClick={() => setDrawerOpen(true)} className="sm:hidden relative" style={{ color: C.text }}>
+              <Icon name="cart" size={19} />
+              <span className="absolute -top-2 -right-2 w-4 h-4 rounded-full text-[9px] flex items-center justify-center" style={{ background: C.purple, color: "white", fontWeight: 700 }}>{itemCount}</span>
+            </button>
+            <button onClick={() => setAdminOpen(true)} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: C.surface2, border: `1px solid ${C.border}` }}><Icon name="user" size={15} color={C.muted} /></button>
+            <button onClick={() => setMenuOpen((v) => !v)} className="md:hidden" style={{ color: C.text }}><Icon name="menu" size={20} /></button>
+          </div>
+        </div>
+        {searchOpen && (
+          <div className="max-w-6xl mx-auto px-5 pb-3">
+            <input autoFocus value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Rechercher un jeu, un abonnement..." className="w-full px-4 py-2.5 rounded-full text-sm outline-none" style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.text }} />
+          </div>
+        )}
+        {menuOpen && (
+          <div className="md:hidden flex flex-col gap-3 px-5 pb-4 text-sm" style={{ borderTop: `1px solid ${C.border}` }}>
+            <button onClick={() => scrollTo("accueil")} className="text-left pt-3 flex items-center gap-2" style={{ color: C.text }}><Icon name="home" size={15} /> Accueil</button>
+            <button onClick={() => scrollTo("boutique")} className="text-left flex items-center gap-2" style={{ color: C.text }}><Icon name="gamepad" size={15} /> Jeux</button>
+            <button onClick={() => scrollTo("apropos")} className="text-left flex items-center gap-2" style={{ color: C.text }}><Icon name="shield" size={15} /> À propos</button>
+            <button onClick={() => scrollTo("contact")} className="text-left flex items-center gap-2" style={{ color: C.text }}><Icon name="mail" size={15} /> Contact</button>
+          </div>
+        )}
+      </header>
+
+      <section id="accueil" className="relative max-w-6xl mx-auto px-5 pt-16 pb-14 text-center flex flex-col items-center overflow-hidden">
+        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 60% 50% at 50% 30%, #8B5CF633, transparent)" }} />
+        <span className="relative text-5xl md:text-6xl mb-2" style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontStyle: "italic" }}>
+          <span style={{ color: C.text }}>N</span><span style={{ color: C.purple }}>S</span>
+        </span>
+        <h1 className="relative text-4xl md:text-6xl leading-[1.05] uppercase" style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700 }}>
+          <span style={{ color: C.text }}>NS Gaming</span> <span style={{ color: C.purple }}>Shop</span>
+        </h1>
+        <p className="relative mt-4 text-base md:text-lg flex items-center gap-3" style={{ color: C.muted }}>
+          <span style={{ color: C.purple }}>➔</span> Tes jeux préférés, au meilleur prix ! <span style={{ color: C.purple }}>➔</span>
+        </p>
+      </section>
+
+      <section className="max-w-6xl mx-auto px-5 pb-12 grid grid-cols-1 md:grid-cols-3 gap-5">
+        {TOP_VENTES.map((t) => {
+          const cat = CATEGORIES.find((c) => c.id === t.catId);
+          const minPrice = Math.min(...PRODUCTS.filter((p) => p.cat === t.catId).flatMap((p) => p.options.map((o) => o.price)));
+          return (
+            <div key={t.catId} className="rounded-2xl overflow-hidden relative" style={{ border: `1px solid ${C.border}`, background: C.surface }}>
+              <span className="absolute top-3 left-0 px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-white z-10" style={{ background: C.purpleDark, borderRadius: "0 6px 6px 0" }}>{t.badge}</span>
+              <div className="h-36 flex items-center justify-center" style={{ background: t.gradient }}><Icon name={cat.icon} size={44} color="white" /></div>
+              <div className="p-5">
+                <h3 className="text-lg" style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, color: C.text }}>{t.name}</h3>
+                <p className="text-sm mt-1 mb-4" style={{ color: C.muted }}>{t.desc}</p>
+                <p className="text-xs" style={{ color: C.muted }}>À partir de <span style={{ color: C.purple, fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>{fmt(minPrice)}</span></p>
+                <button onClick={() => goToCategory(t.catId)} className="mt-4 w-full flex items-center justify-center gap-2 py-2.5 rounded-full text-sm font-medium text-white" style={{ background: C.purple }}>Voir les offres <Icon name="chevronRight" size={14} /></button>
+              </div>
+            </div>
+          );
+        })}
+      </section>
+
+      <section id="comment" className="max-w-6xl mx-auto px-5 pb-12">
+        <h2 className="text-center text-sm uppercase tracking-[0.2em] mb-8" style={{ color: C.purple, fontFamily: "'JetBrains Mono', monospace" }}>Comment ça marche</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          {[
+            { n: "01", title: "Choisis ton produit", desc: "Sélectionne ton jeu, abonnement ou carte cadeau." },
+            { n: "02", title: "Paie via MonCash / NatCash", desc: "Envoie le montant et garde ta référence de transaction." },
+            { n: "03", title: "Reçois ta recharge", desc: "On valide ton paiement et on livre en quelques minutes." },
+          ].map((s) => (
+            <div key={s.n} className="rounded-2xl p-5" style={{ border: `1px solid ${C.border}`, background: C.surface }}>
+              <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: "1.75rem", color: C.purple }}>{s.n}</span>
+              <h3 className="text-sm mt-2 mb-1 font-semibold" style={{ color: C.text }}>{s.title}</h3>
+              <p className="text-xs" style={{ color: C.muted }}>{s.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <main id="boutique" className="max-w-6xl mx-auto px-5 pb-16">
+        <div className="flex gap-2 overflow-x-auto pb-4">
+          {CATEGORIES.map((c) => {
+            const active = activeCat === c.id && !searchQuery;
+            return (
+              <button key={c.id} onClick={() => { setSearchQuery(""); setActiveCat(c.id); }} className="flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-medium whitespace-nowrap shrink-0" style={{ background: active ? c.color : "transparent", color: active ? "#0A0A12" : C.text, border: `1px solid ${active ? c.color : C.border}` }}>
+                <Icon name={c.icon} size={15} /> {c.label}
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex flex-col gap-4">
+          {filtered.flatMap((p) => p.options.map((opt) => {
+            const cat = CATEGORIES.find((c) => c.id === p.cat);
+            return (
+              <div key={`${p.id}-${opt.label}`} className="rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center gap-4" style={{ border: `1px solid ${C.border}`, background: C.surface }}>
+                <div className="w-16 h-16 rounded-xl shrink-0 flex items-center justify-center" style={{ background: `linear-gradient(135deg, ${p.color}, ${C.pink})` }}>
+                  <Icon name={cat ? cat.icon : "gift"} size={26} color="white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: "1.05rem", color: C.text }}>{p.name} — {opt.label}</h3>
+                  <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: "#22C55E22", color: C.green }}>Disponible</span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-medium" style={{ background: C.surface2, color: C.muted, border: `1px solid ${C.border}` }}>{p.name}</span>
+                  </div>
+                  <p className="text-xs mt-1.5" style={{ color: C.muted }}>{p.needsId ? `Livraison via ${p.needsId} · instantané` : "Livraison instantanée par code"}</p>
+                </div>
+                <div className="flex sm:flex-col items-center sm:items-end justify-between gap-2 shrink-0">
+                  <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: "1.15rem", color: C.gold }}>{fmt(opt.price)}</span>
+                  <button onClick={() => addToCart(p, opt)} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-white whitespace-nowrap" style={{ background: C.purple }}><Icon name="cart" size={14} /> Acheter maintenant</button>
+                </div>
+              </div>
+            );
+          }))}
+          {filtered.length === 0 && <p className="text-center py-10 text-sm" style={{ color: C.muted }}>Aucun résultat pour cette recherche.</p>}
+        </div>
+      </main>
+
+      <section id="apropos" className="max-w-3xl mx-auto px-5 pb-16 text-center">
+        <h2 className="text-sm uppercase tracking-[0.2em] mb-4" style={{ color: C.purple, fontFamily: "'JetBrains Mono', monospace" }}>À propos</h2>
+        <p className="text-sm" style={{ color: C.muted }}>NS Gaming Shop est une boutique haïtienne de recharges pour jeux mobiles, abonnements de streaming et cartes cadeaux. On travaille avec MonCash et NatCash pour des paiements simples et une livraison rapide, directement suivie par notre équipe.</p>
+      </section>
+
+      <section className="max-w-6xl mx-auto px-5 pb-16">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-5 rounded-2xl p-6" style={{ border: `1px solid ${C.border}`, background: C.surface }}>
+          {[
+            { icon: "shield", title: "Paiement sécurisé", desc: "Transactions vérifiées manuellement." },
+            { icon: "gamepad", title: "Livraison rapide", desc: "Produits livrés en quelques minutes." },
+            { icon: "mail", title: "Support 24/7", desc: "Notre équipe est là pour toi." },
+            { icon: "gift", title: "Meilleurs prix", desc: "Des tarifs imbattables en gourdes." },
+          ].map((f) => (
+            <div key={f.title} className="flex flex-col items-start gap-2">
+              <Icon name={f.icon} size={22} color={C.purple} />
+              <p className="text-sm font-semibold" style={{ color: C.text }}>{f.title}</p>
+              <p className="text-xs" style={{ color: C.muted }}>{f.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <footer id="contact" style={{ borderTop: `1px solid ${C.border}` }}>
+        <div className="max-w-6xl mx-auto px-5 py-8 flex flex-col sm:flex-row justify-between items-center gap-4 text-sm" style={{ color: C.muted }}>
+          <p>© 2026 <span style={{ color: C.purple }}>NS Gaming Shop</span>. Tous droits réservés.</p>
+          <div className="flex items-center gap-4">
+            <p>WhatsApp : +509 38 22 3773</p>
+            <button onClick={() => setAdminOpen(true)} className="text-xs underline underline-offset-2" style={{ color: C.muted }}>Admin</button>
+          </div>
+        </div>
+      </footer>
+
+      {drawerOpen && (
+        <div className="fixed inset-0 z-40 flex justify-end">
+          <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.6)" }} onClick={() => setDrawerOpen(false)} />
+          <div className="relative w-full max-w-sm h-full flex flex-col shadow-2xl" style={{ background: C.surface }}>
+            <button onClick={() => setDrawerOpen(false)} className="absolute top-4 right-4 z-10"><Icon name="close" size={18} color={C.muted} /></button>
+            <Ticket items={cart} total={total} onRemove={removeFromCart} onQty={changeQty} />
+            {cart.length > 0 && (
+              <div className="px-5 pb-5">
+                <button onClick={() => setCheckoutOpen(true)} className="w-full flex items-center justify-center gap-2 py-3 rounded-full text-sm font-medium text-white" style={{ background: C.purple }}>Passer la commande <Icon name="chevronRight" size={16} /></button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {checkoutOpen && <CheckoutModal items={cart} total={total} onClose={() => setCheckoutOpen(false)} onConfirm={() => { setCart([]); setDrawerOpen(false); }} />}
+      {adminOpen && <AdminPanel onClose={() => setAdminOpen(false)} />}
+      {chatOpen && <ChatBot onClose={() => setChatOpen(false)} />}
+
+      <button onClick={() => setChatOpen((v) => !v)} className="fixed bottom-5 right-5 z-50 w-14 h-14 rounded-full flex items-center justify-center shadow-2xl" style={{ background: `linear-gradient(135deg, ${C.purple}, ${C.pink})` }}><Icon name="bot" size={22} color="white" /></button>
+
+      {toast && <div className="fixed bottom-5 left-1/2 -translate-x-1/2 px-4 py-2.5 rounded-full text-sm text-white z-50" style={{ background: C.purple }}>{toast}</div>}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<NSGamingShop />);
+</script>
+</body>
+</html>
